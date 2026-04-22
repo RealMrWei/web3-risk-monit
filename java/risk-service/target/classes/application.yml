@@ -1,0 +1,19 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: risk-service
+feign:
+  circuitbreaker:
+    enabled: true # 开启降级
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 3
+        failure-rate-threshold: 33
+        wait-duration-in-open-state: 5000
+ai:
+  agent:
+    url: http://localhost:8081

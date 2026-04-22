@@ -1,0 +1,8 @@
+com\web3\risk_service\feign\AiAgentFallback.class
+com\web3\risk_service\RiskServiceApplication.class
+com\web3\risk_service\TransactionRequest.class
+com\web3\risk_service\dto\ChatResponse.class
+com\web3\risk_service\RiskController.class
+com\web3\risk_service\feign\AiAgentFeignClient.class
+com\web3\risk_service\RiskService.class
+com\web3\risk_service\dto\ChatRequest.class

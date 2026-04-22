@@ -1,0 +1,20 @@
+POST http://localhost:8081/ai/agent/chat
+Content-Type: application/json
+
+{
+  "message": "学习英语如何翻译"
+}
+
+### 测试风控服务调用 AI（8080）→ 你最关心的
+POST http://localhost:8080/api/risk/check-with-ai
+Content-Type: text/plain
+
+用户地址:0x123456,交易金额:100USDT,合约地址:0x789abc
+
+### 测试ai调用propmt
+POST http://localhost:8081/ai/agent/chattorisk
+Content-Type: application/json
+
+{
+  "message": "帮我检查交易风险 from=0x111,to=0x222,amount=100"
+}
