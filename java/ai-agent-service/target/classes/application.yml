@@ -14,3 +14,22 @@ spring:
         options:
           # 使用 Qwen2.5-7B 模型
           model: Qwen/Qwen2.5-7B-Instruct
+          stream: true  # 必须开
+          max-tokens: 1024  # 别太大
+          temperature: 0.1  # 工具调用越低越好
+  cloud:
+    httpclient:
+      max-total: 200
+      default-max-per-route: 50
+      connect-timeout: 3000
+      response-timeout: 10000
+      pool:
+        max-idle-time: 10s
+
+feign:
+  account-service:
+    url: http://127.0.0.1:8084
+  transaction-service:
+    url: http://127.0.0.1:8084
+  web3go-service:
+    url: http://127.0.0.1:8085

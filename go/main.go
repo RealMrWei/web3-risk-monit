@@ -118,6 +118,14 @@ type TransactionRequest struct {
 	Amount      float64 `json:"amount"`
 }
 
+type EthBalanceResponse struct {
+	Address    string  `json:"address"`
+	Balance    float64 `json:"balance"`
+	UsdtValue  float64 `json:"usdtValue"`
+}
+
+var ethClient *ethclient.Client
+
 func main() {
 	// connect to hardhat node
 	rpcUrl := "ws://127.0.0.1:8545"
@@ -126,6 +134,13 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Println("Connected to Hardhat Node successfully")
+
+	// 设置全局客户端用于HTTP接口
+	httpRpcUrl := "http://127.0.0.1:8545"
+	ethClient, err = ethclient.Dial(httpRpcUrl)
+	if err != nil {
+		log.Fatal("Failed to connect to Ethereum client for HTTP API:", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -149,6 +164,9 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Println("Listening for events... started ")
+
+	// 启动HTTP服务器
+	go startHttpServer()
 
 	// handle event
 	for {
@@ -190,6 +208,66 @@ func main() {
 			return
 		}
 	}
+}
+
+// 启动HTTP服务器
+func startHttpServer() {
+	http.HandleFunc("/eth/balance/", handleGetEthBalance)
+	fmt.Println("HTTP server started on :8085")
+	if err := http.ListenAndServe(":8085", nil); err != nil {
+		log.Fatal("HTTP server error:", err)
+	}
+}
+
+// 处理获取ETH余额请求
+func handleGetEthBalance(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Received request for ETH balance:", r.URL.Path)
+	// 从URL路径中提取地址
+	path := r.URL.Path
+	address := strings.TrimPrefix(path, "/eth/balance/")
+
+	if address == "" {
+		http.Error(w, "Address is required", http.StatusBadRequest)
+		return
+	}
+	fmt.Println("Extracted address:", address)
+	// 验证地址格式
+	if !common.IsHexAddress(address) {
+		http.Error(w, "Invalid Ethereum address format", http.StatusBadRequest)
+		return
+	}
+
+	// 获取余额
+	balance, err := getEthBalance(address)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get balance: %v", err), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("Balance:", balance)
+	// 返回JSON响应
+	response := EthBalanceResponse{
+		Address:   address,
+		Balance:   balance,
+		UsdtValue: balance, // 暂时使用 ETH 余额作为 USDT 价值（实际项目中应该查询汇率）
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// 获取ETH余额
+func getEthBalance(address string) (float64, error) {
+	account := common.HexToAddress(address)
+	balance, err := ethClient.BalanceAt(context.Background(), account, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	// 将wei转换为ETH
+	f := new(big.Float).SetInt(balance)
+	ethValue := new(big.Float).Quo(f, big.NewFloat(1e18))
+	res, _ := ethValue.Float64()
+	return res, nil
 }
 
 // send transaction data to Java SpringBoot risk service

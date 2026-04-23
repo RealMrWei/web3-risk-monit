@@ -3,25 +3,30 @@ package com.web3.ai.service.impl;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
-import com.web3.ai.client.LlmClient;
 import com.web3.ai.service.AiAgentService;
+
+import reactor.core.publisher.Flux;
 
 // 注释掉 @Service，让真实实现生效
 // @Service
-public class MockAiServiceImpl implements AiAgentService, LlmClient {
+public class MockAiServiceImpl implements AiAgentService {
 
     @Override
-    public String chat(String message) {
+    public Flux<String> chat(String message) {
         // TODO Auto-generated method stub
-        return "【AI-Agent】已接收：" + message
-                + "\n当前模式：Mock 模拟调用"
-                + "\n风控助手已就绪";
+        throw new UnsupportedOperationException("Unimplemented method 'chat'");
     }
 
     @Override
     public String chattorisk(String message) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'chattorisk'");
+    }
+
+    @Override
+    public String chatwithnotool(String message) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'chatwithnotool'");
     }
 
 }

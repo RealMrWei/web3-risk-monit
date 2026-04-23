@@ -16,6 +16,7 @@
     <modules>
         <module>risk-service</module>
         <module>ai-agent-service</module>
+        <module>account-service</module>
     </modules>
 
     <!-- 统一依赖管理 -->
@@ -73,6 +74,9 @@
                         <source>${java.version}</source>
                         <target>${java.version}</target>
                         <encoding>UTF-8</encoding>
+                        <compilerArgs>
+                            <arg>-parameters</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
             </plugins>

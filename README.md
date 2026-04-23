@@ -9,7 +9,7 @@ This system monitors Ethereum blockchain events from a Vault smart contract, cap
 - **Smart Contract Layer**: Solidity-based Vault contract with event emission
 - **Data Collection Layer**: Go-based event listener using WebSocket subscription
 - **Risk Analysis Layer**: Java Spring Boot service for transaction risk assessment
-- **AI Agent Layer**: Spring AI-powered intelligent agent for natural language risk queries
+- **AI Agent Layer**: Spring AI-powered intelligent agent for natural language risk queries with function calling capabilities
 
 ## 🏗️ Architecture
 
@@ -24,7 +24,7 @@ This system monitors Ethereum blockchain events from a Vault smart contract, cap
                                                   Monitoring                          Risk Assessment Logic
                                                                                               ▲
                                                                                               │
-                                                                                              │ HTTP
+                                                                                              │ Feign Client
                                                                                               ▼
                                                                                     ┌────────────────────┐
                                                                                     │                    │
@@ -35,6 +35,11 @@ This system monitors Ethereum blockchain events from a Vault smart contract, cap
                                                                                          Port: 8081
                                                                                   Natural Language Interface
                                                                                         Function Calling
+                                                                                 ┌────────┬─────────┬────────┐
+                                                                                 │        │         │        │
+                                                                                 ▼        ▼         ▼        ▼
+                                                                          Account-Svc  Tx-Svc  Web3Go-Svc  LLM API
+                                                                             :8084      :8084     :8085    SiliconFlow
 ```
 
 ## 🚀 Features
@@ -58,15 +63,17 @@ This system monitors Ethereum blockchain events from a Vault smart contract, cap
 - **Auto-Reconnection**: Handles subscription errors with automatic reconnection logic
 - **Indexed Parameter Handling**: Correctly extracts indexed address parameters from `Topics[1]`
 - **HTTP Integration**: Forwards transaction data to Java risk service
+- **ETH Balance Query API**: Provides REST endpoint for querying Ethereum address balances
 
 **Technical Highlights:**
 - Uses `ws://` protocol for WebSocket connection to Hardhat node
 - Implements proper error handling and graceful shutdown via context cancellation
 - Converts Wei to Ether for human-readable amount reporting
 - Follows Solidity event parsing best practices (indexed vs non-indexed parameters)
+- Exposes HTTP API at port 8085 for balance queries
 
 **Key File:**
-- `go/main.go` - Complete event listener implementation (~220 lines)
+- `go/main.go` - Complete event listener implementation (~300 lines)
 
 ### 3. Risk Assessment Service (Java/Spring Boot) - 30%
 - **RESTful API**: Exposes `/api/risk/check` endpoint for transaction analysis
@@ -86,28 +93,37 @@ This system monitors Ethereum blockchain events from a Vault smart contract, cap
 
 ### 4. AI Agent Service (Java/Spring AI) - 20%
 - **Natural Language Interface**: Accepts risk queries in natural language
-- **Function Calling**: AI automatically invokes risk detection tools based on user intent
-- **Spring AI Integration**: Uses SiliconFlow (Qwen2.5-7B) as the LLM backend
-- **Tool Registration**: Configurable function callbacks for custom business logic
+- **Function Calling**: AI automatically invokes tools based on user intent
+- **Multi-Tool Integration**: 
+  - Account Balance Query (via Feign → account-service:8084)
+  - Transaction History Query (via Feign → transaction-service:8084)
+  - ETH Balance Query (via Feign → web3go-service:8085)
+- **Spring AI Integration**: Uses SiliconFlow (Qwen/Qwen2.5-7B-Instruct) as the LLM backend
+- **Streaming Response**: Real-time token streaming for better user experience
 - **Microservice Architecture**: Independent service with OpenFeign integration
 
 **Core Capabilities:**
-- Transaction risk assessment via natural language
+- Natural language transaction risk assessment
 - Automatic parameter extraction from user messages
 - Intelligent tool selection and invocation
-- Context-aware risk analysis responses
+- Context-aware multi-turn conversations
+- Account and balance information queries
 
 **Technical Highlights:**
 - Spring AI 1.0+ with ChatClient builder pattern
-- FunctionCallback configuration with inputType specification
+- `@Tool` annotation for function registration (replaces deprecated `@AiFunction`)
+- InputType specification for proper JSON schema generation
 - SiliconFlow OpenAI-compatible API integration
 - Constructor-based dependency injection with Lombok
+- Stream-based response handling for real-time output
 
 **Key Files:**
 - `java/ai-agent-service/src/main/java/com/web3/ai/controller/AiAgentController.java` - REST endpoints
 - `java/ai-agent-service/src/main/java/com/web3/ai/service/impl/OpenAiAgentServiceImpl.java` - AI service implementation
-- `java/ai-agent-service/src/main/java/com/web3/ai/config/FunctionConfig.java` - Function calling configuration
-- `java/ai-agent-service/src/main/resources/application.yml` - SiliconFlow API configuration
+- `java/ai-agent-service/src/main/java/com/web3/ai/tools/AccountBalanceTool.java` - Account balance tool
+- `java/ai-agent-service/src/main/java/com/web3/ai/tools/TransactionHistoryTool.java` - Transaction history tool
+- `java/ai-agent-service/src/main/java/com/web3/ai/tools/EthBalanceTool.java` - ETH balance tool
+- `java/ai-agent-service/src/main/resources/application.yml` - Configuration file
 
 ## 🛠️ Technology Stack
 
@@ -119,9 +135,11 @@ This system monitors Ethereum blockchain events from a Vault smart contract, cap
 | Event Listener | Go | 1.25.4 |
 | Ethereum Library | go-ethereum | v1.17.2 |
 | Backend Service | Java | 17 |
-| Web Framework | Spring Boot | 4.0.5 |
+| Web Framework | Spring Boot | 3.4.3 |
+| Cloud Framework | Spring Cloud | 2024.0.0 |
 | AI Framework | Spring AI | 1.0.0-M6 |
-| LLM Provider | SiliconFlow (Qwen2.5-7B) | - |
+| LLM Provider | SiliconFlow (Qwen2.5-7B-Instruct) | - |
+| Service Communication | OpenFeign | - |
 | Build Tool | Maven | - |
 
 ## 📦 Installation & Setup
@@ -130,7 +148,7 @@ This system monitors Ethereum blockchain events from a Vault smart contract, cap
 - Node.js & npm
 - Go 1.25+
 - Java 17+
-- Maven
+- Maven 3.6+
 
 ### 1. Smart Contract Setup
 
@@ -162,31 +180,65 @@ go mod download
 go run main.go
 ```
 
-The listener will connect to the Hardhat node via WebSocket and start monitoring events.
+The listener will:
+- Connect to the Hardhat node via WebSocket (port 8545)
+- Start monitoring contract events
+- Expose HTTP API at port 8085 for balance queries
 
 ### 4. Start Java Risk Service
 
 ```bash
-cd java
+cd java/risk-service
 mvn spring-boot:run
 ```
 
 The service will start at `http://localhost:8080`.
 
-### 4. Start AI Agent Service
+### 5. Start AI Agent Service
+
+**Important**: Ensure all dependent services are running first:
+- account-service (port 8084)
+- web3go-service (Go service, port 8085)
+- Hardhat node (port 8545)
 
 ```bash
 cd java/ai-agent-service
+mvn clean install
 mvn spring-boot:run
 ```
 
 The service will start at `http://localhost:8081`.
 
-**Environment Variables Required:**
-```bash
-# Set your SiliconFlow API key
-export SILICONFLOW_API_KEY="your-api-key-here"
+**Configuration Required:**
+
+Edit `java/ai-agent-service/src/main/resources/application.yml`:
+
+```yaml
+spring:
+  ai:
+    openai:
+      api-key: your-siliconflow-api-key-here  # Get from https://siliconflow.cn
+      base-url: https://api.siliconflow.cn/v1  # Note: must include /v1
+      chat:
+        options:
+          model: Qwen/Qwen2.5-7B-Instruct
+          stream: true  # Must be enabled
+          temperature: 0.1  # Lower for tool calling
+          max-tokens: 1024
+
+feign:
+  account-service:
+    url: http://127.0.0.1:8084
+  transaction-service:
+    url: http://127.0.0.1:8084
+  web3go-service:
+    url: http://127.0.0.1:8085
 ```
+
+**Get Your API Key:**
+1. Visit [SiliconFlow Platform](https://siliconflow.cn)
+2. Register and obtain your API key
+3. Replace `your-siliconflow-api-key-here` in the configuration
 
 ## 🧪 Testing
 
@@ -219,31 +271,69 @@ This will execute two test transactions:
    - Java service console showing risk assessment results
    - Large deposits (>2 ETH) trigger risk warnings
 
-### AI Agent Test
+### AI Agent Service Tests
 
-Test the AI-powered risk assessment:
-
+#### Test 1: Account Balance Query
 ```bash
-# Test 1: Low risk transaction
-curl -X POST http://localhost:8081/ai/agent/chattorisk \
-  -H "Content-Type: application/json" \
-  -d '{"message":"检测地址 0x111 向 0x222 转账 100 ETH 的风险"}'
-
-# Test 2: High risk transaction
-curl -X POST http://localhost:8081/ai/agent/chattorisk \
-  -H "Content-Type: application/json" \
-  -d '{"message":"检测地址 0xAlice 向 0xBob 转账 5000 ETH 的风险"}'
-
-# Test 3: Regular chat (no tool invocation)
 curl -X POST http://localhost:8081/ai/agent/chat \
   -H "Content-Type: application/json" \
-  -d '{"message":"你好，请介绍一下这个系统"}'
+  -d '{"message":"查询用户1的账户余额"}'
 ```
 
-Expected behavior:
-- Transactions > 1000 ETH → AI detects high risk
-- Transactions ≤ 1000 ETH → AI detects low risk
-- Non-risk queries → AI responds conversationally
+Expected: AI calls AccountBalanceTool and returns balance information
+
+#### Test 2: Transaction History Query
+```bash
+curl -X POST http://localhost:8081/ai/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"用户1最近的交易记录是什么？"}'
+```
+
+Expected: AI calls TransactionHistoryTool and returns transaction list
+
+#### Test 3: ETH Balance Query
+```bash
+curl -X POST http://localhost:8081/ai/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"查询地址 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 的ETH余额"}'
+```
+
+Expected: AI calls EthBalanceTool and returns ETH balance
+
+#### Test 4: Risk Assessment
+```bash
+curl -X POST http://localhost:8081/ai/agent/chattorisk \
+  -H "Content-Type: application/json" \
+  -d '{"message":"检测这笔交易是否有风险"}'
+```
+
+Expected: AI performs risk analysis with tool invocation
+
+#### Test 5: General Chat (No Tools)
+```bash
+curl -X POST http://localhost:8081/ai/agent/chatwithnotool \
+  -H "Content-Type: application/json" \
+  -d '{"message":"你好，请介绍一下你自己"}'
+```
+
+Expected: Conversational response without tool invocation
+
+### Go Service API Test
+
+Test the ETH balance query endpoint:
+
+```bash
+curl http://localhost:8085/eth/balance/0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+```
+
+Expected response:
+```json
+{
+  "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "balance": 10000.0,
+  "usdtValue": 10000.0
+}
+```
 
 ## 🔍 Key Implementation Details
 
@@ -261,6 +351,13 @@ The Go listener correctly handles Solidity event parameters:
 - Go service implements auto-reconnection for WebSocket failures
 - Context-based cancellation for graceful shutdown
 - Java service provides health check endpoint for monitoring
+- Feign clients configured with timeout protection (connect: 3s, read: 10s)
+
+### AI Function Calling
+- Tools are registered using `@Tool` annotation with descriptive names
+- Input types explicitly specified for proper JSON schema generation
+- Temperature set low (0.1) for deterministic tool selection
+- Streaming enabled for real-time response delivery
 
 ## 📚 API Documentation
 
@@ -281,16 +378,40 @@ Request Body:
 **GET** `/api/risk/health`
 Returns service health status.
 
+### Go Web3 Service (Port 8085)
+
+**GET** `/eth/balance/{address}`
+Queries ETH balance for an Ethereum address.
+
+Path Parameter:
+- `address`: Ethereum address (e.g., `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`)
+
+Response:
+```json
+{
+  "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "balance": 10000.0,
+  "usdtValue": 10000.0
+}
+```
+
 ### AI Agent Service (Port 8081)
 
 **POST** `/ai/agent/chat`
-General chat endpoint for natural language interaction.
+General chat endpoint with function calling support.
 
 Request Body:
 ```json
 {
-  "message": "你好，请介绍自己"
+  "message": "查询用户1的账户余额"
 }
+```
+
+Response: Server-Sent Events (streaming)
+```
+data: {"answer":"用户1的账户余额为"}
+data: {"answer":" 15800.50 ETH"}
+data: {"answer":"，状态正常。"}
 ```
 
 **POST** `/ai/agent/chattorisk`
@@ -306,7 +427,24 @@ Request Body:
 Response:
 ```json
 {
-  "answer": "交易的风险等级为低，发送地址为0x111，接收地址为0x222，交易金额为100。链上交易风险检测已完成。"
+  "answer": "经过分析，该交易的风险等级为低..."
+}
+```
+
+**POST** `/ai/agent/chatwithnotool`
+Chat endpoint without tool invocation.
+
+Request Body:
+```json
+{
+  "message": "你好，请介绍自己"
+}
+```
+
+Response:
+```json
+{
+  "answer": "你好！我是Web3风控助手..."
 }
 ```
 
@@ -315,10 +453,10 @@ Response:
 | Module | Weight | Status | Description |
 |--------|--------|--------|-------------|
 | Smart Contract | 10% | ✅ Complete | Vault contract with tests |
-| Event Collection | 40% | ✅ Complete | Go WebSocket listener |
+| Event Collection | 40% | ✅ Complete | Go WebSocket listener + HTTP API |
 | Business Logic | 20% | ✅ Complete | Java risk assessment |
-| AI Agent | 20% | ✅ Complete | Spring AI-powered agent |
-| Documentation | 10% | ✅ Complete | This README |
+| AI Agent | 20% | ✅ Complete | Spring AI-powered agent with function calling |
+| Documentation | 10% | ✅ Complete | Comprehensive README |
 
 **Total Completion: 100%** ✅
 
@@ -333,6 +471,8 @@ This system can be extended for:
 - **Natural language risk queries via AI agent**
 - **Intelligent transaction analysis with function calling**
 - **Multi-turn conversational risk assessment**
+- **Account balance and transaction history queries**
+- **Cross-chain asset monitoring**
 
 ## 📝 Notes
 
@@ -341,8 +481,38 @@ This system can be extended for:
 - WebSocket connection requires Hardhat node to support subscriptions
 - For production use, consider adding authentication, rate limiting, and persistent storage
 - **AI Agent requires SiliconFlow API key configured in `application.yml`**
-- **Function calling threshold (1000 ETH) can be adjusted in `FunctionConfig.java`**
-- **AI model automatically decides when to invoke risk detection tools based on user intent**
+- **Base URL must include `/v1` suffix**: `https://api.siliconflow.cn/v1`
+- **Function calling works best with temperature ≤ 0.1**
+- **All three dependent services must be running for full AI agent functionality**:
+  - account-service (8084)
+  - web3go-service (8085)
+  - Hardhat node (8545)
+- **Maven compiler must use `-parameters` flag** for proper parameter name resolution
+- **YAML configuration must not have duplicate keys** (merge all `spring:` sections)
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**1. AI Agent fails to start with "DuplicateKeyException"**
+- **Cause**: Duplicate `spring:` keys in `application.yml`
+- **Solution**: Merge all spring configurations into one section
+
+**2. "IllegalArgumentException: Name for argument not specified"**
+- **Cause**: Missing `-parameters` compiler flag
+- **Solution**: Add `<compilerArgs><arg>-parameters</arg></compilerArgs>` to pom.xml
+
+**3. Feign client timeout**
+- **Cause**: Dependent service not responding
+- **Solution**: Check if account-service (8084) and web3go-service (8085) are running
+
+**4. JSON deserialization error**
+- **Cause**: Mismatch between Go response fields and Java DTO
+- **Solution**: Ensure Go's `EthBalanceResponse` includes all fields expected by Java's `EthDTO`
+
+**5. AI doesn't invoke tools**
+- **Cause**: Temperature too high or stream disabled
+- **Solution**: Set `temperature: 0.1` and `stream: true` in configuration
 
 ## 🤝 Contributing
 
@@ -351,3 +521,8 @@ Feel free to submit issues and enhancement requests!
 ## 📄 License
 
 This project is open source and available under the MIT License.
+
+---
+
+**Last Updated**: April 23, 2026  
+**Maintained by**: Web3 Risk Monitor Team

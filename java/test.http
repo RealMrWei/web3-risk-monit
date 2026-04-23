@@ -5,6 +5,14 @@ Content-Type: application/json
   "message": "学习英语如何翻译"
 }
 
+### 测试无工具
+POST http://localhost:8081/ai/agent/chatwithnotool
+Content-Type: application/json
+
+{
+  "message": "翻译 小狗"
+}
+
 ### 测试风控服务调用 AI（8080）→ 你最关心的
 POST http://localhost:8080/api/risk/check-with-ai
 Content-Type: text/plain
@@ -17,4 +25,53 @@ Content-Type: application/json
 
 {
   "message": "帮我检查交易风险 from=0x111,to=0x222,amount=100"
+}
+
+### 测试： 获取指定地址的ETH余额
+
+GET http://localhost:8085/eth/balance/0x5FbDB2315678afecb367f032d93F642f64180aa3
+Content-Type: application/json
+
+
+### 1. 查询用户账户余额
+POST http://localhost:8081/ai/agent/chat
+Content-Type: application/json
+
+{
+  "message": "帮我查询用户ID 2 的账户余额"
+}
+
+### 获取用户账户余额
+
+GET http://localhost:8084/account/balance/1
+Content-Type: application/json
+
+
+
+### 2. 查询用户交易记录
+POST http://localhost:8081/ai/agent/chat
+Content-Type: application/json
+
+{
+  "message": "帮我查询用户 1 历史交易记录"
+}
+
+### 3. 查询 ETH 钱包余额（Go 微服务）
+POST http://localhost:8081/ai/agent/chat
+Content-Type: application/json
+
+{
+  "message": "查询以太坊地址 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 的 ETH余额"
+}
+
+### 测试1: 查询指定地址的 ETH 余额
+GET http://localhost:8085/eth/balance/0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+Content-Type: application/json
+
+### 4. 连续查询：先查账户余额，再查 ETH
+POST http://localhost:8081/ai/agent/chat
+Content-Type: application/json
+
+{
+  "message": "用户1001的账户余额是多少？他的钱包0x1234有多少ETH？"
 }

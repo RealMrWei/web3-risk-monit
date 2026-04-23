@@ -5,23 +5,39 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Service;
 
 import com.web3.ai.service.AiAgentService;
+import com.web3.ai.tools.AccountBalanceTool;
+import com.web3.ai.tools.EthBalanceTool;
+import com.web3.ai.tools.TransactionHistoryTool;
+
+import reactor.core.publisher.Flux;
 
 @Service
 public class OpenAiAgentServiceImpl implements AiAgentService {
 
     private final ChatClient chatClient;
+    private final AccountBalanceTool accountBalanceTool;
+    private final TransactionHistoryTool transactionHistoryTool;
+    private final EthBalanceTool ethBalanceTool;
 
-    // 通过构造函数注入 ChatClient.Builder，然后构建 ChatClient
-    public OpenAiAgentServiceImpl(ChatClient.Builder chatClientBuilder) {
+    public OpenAiAgentServiceImpl(
+            ChatClient.Builder chatClientBuilder,
+            AccountBalanceTool accountBalanceTool,
+            TransactionHistoryTool transactionHistoryTool,
+            EthBalanceTool ethBalanceTool) {
         this.chatClient = chatClientBuilder.build();
+        this.accountBalanceTool = accountBalanceTool;
+        this.transactionHistoryTool = transactionHistoryTool;
+        this.ethBalanceTool = ethBalanceTool;
     }
 
     @Override
-    public String chat(String message) {
+    public Flux<String> chat(String message) {
         // 使用 Spring AI 的 ChatClient 调用真实的 AI 模型
+        System.out.println("Received message: " + message);
         return chatClient.prompt()
                 .user(message)
-                .call()
+                .tools(accountBalanceTool, transactionHistoryTool, ethBalanceTool) // 启用工具
+                .stream()
                 .content();
     }
 
@@ -35,5 +51,15 @@ public class OpenAiAgentServiceImpl implements AiAgentService {
                 .call()
                 .content();
 
+    }
+
+    @Override
+    public String chatwithnotool(String message) {
+        // TODO Auto-generated method stub
+        return chatClient.prompt()
+                .user(message)
+                // 不启用工具
+                .call()
+                .content();
     }
 }
