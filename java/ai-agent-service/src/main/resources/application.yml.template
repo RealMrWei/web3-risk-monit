@@ -1,0 +1,29 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: ai-agent-service
+  ai:
+    openai:
+      api-key: ${SILICONFLOW_API_KEY}  # 从环境变量读取，请设置 SILICONFLOW_API_KEY
+      base-url: https://api.siliconflow.cn/v1  # 注意：必须包含 /v1
+      chat:
+        options:
+          model: Qwen/Qwen2.5-7B-Instruct
+          stream: true  # 必须开启流式响应
+          temperature: 0.1  # 工具调用时建议较低温度
+          max-tokens: 1024
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 10000
+  account-service:
+    url: http://127.0.0.1:8084
+  transaction-service:
+    url: http://127.0.0.1:8084
+  web3go-service:
+    url: http://127.0.0.1:8085
